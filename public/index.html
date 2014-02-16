@@ -1,0 +1,147 @@
+<html>
+
+<head>
+    <title>Lupus - Wolfgame in real life!</title>
+    <link href="http://netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css" rel="stylesheet">
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="http://code.jquery.com/jquery-2.1.0.min.js"></script>
+    <style>
+        body {
+            font-family: 'Courier New' !important;
+        }
+    </style>
+    <script>
+        $(document).ready(function() {
+            var socket = io.connect();
+            window.socket = socket;
+            window.log = function(msg) {
+                $('#message').prepend('<li><h4>' + msg + '</h4></li>');
+            }
+            socket.on('connect', function() {
+                $('#connecting').hide();
+            });
+            socket.on('joining', function(data) {
+                $('#connecting').hide();
+                $('#setup').show();
+                $('.playerid').html(data.id)
+                window.pid = data.id
+                $('.playerlist').html(data.players.join(', '));
+                if (window.pid == '1') {
+                    $('#start').show();
+                }
+            });
+            socket.on('full', function(data) {
+                $('#connecting').hide();
+                $('#setup').hide();
+                $('#full').show();
+            });
+            socket.on('players', function(data) {
+                $('.playerlist').html(data.players.join(', '));
+                var actstr = ''
+                data.players.forEach(function(player) {
+                    if (player != 'P' + window.pid) {
+                        actstr += '<button onclick="act(\'' + player + '\')" class="btn btn-primary btn-lg">' + player + '</button>&nbsp;'
+                    }
+                })
+                $('#actbar').html(actstr)
+            });
+            socket.on('disconnect', function() {
+                window.location.reload(true)
+            });
+            socket.on('notice', function(data) {
+                alert(data.message);
+            });
+            socket.on('starting', function() {
+                $('#setup').hide();
+                $('#ingame').show();
+            });
+            socket.on('night', function(data) {
+                log('It is now night.');
+                $('body').css('background-color', '#000');
+                $('body').css('color', '#fff');
+                $('#role').html('You are a ' + data.name + '!');
+                if (data.role.canAct) {
+                    $('#roledesc').html(data.role.description)
+                }
+                else {
+                    $('#roledesc').html('Zzzzzzzz...')
+                }
+                if (data.role.canAct) {
+                    $('#roleinst').html('Use the buttons below to peruse your role.');
+                    $('#actbar').show();
+                }
+                else {
+                    $('#roleinst').html('You are currently sleeping in bed. Wait until day comes.');
+                }
+                window.canAct = data.role.canAct
+                window.act = function(player) {
+                    socket.emit('act', {player: player})
+                    $('#actbar').hide();
+                }
+            });
+            socket.on('day', function() {
+                log('It is now day.')
+                $('#actbar').show();
+                $('#role').html('It is now day.')
+                $('#roledesc').html('The villagers must now decide who to lynch.')
+                $('#roleinst').html('Use the buttons below to decide who to lynch.')
+                $('body').css('background-color', '#fff');
+                $('body').css('color', '#000');
+                window.act = function(player) {
+                    socket.emit('lynch', {player: player});
+                }
+            });
+            socket.on('gameover', function(data) {
+                $('#winners').html(data.winners);
+                $('#ingame').hide();
+                $('#end').show();
+            })
+            socket.on('death', function(data) {
+                log('<b>' + data.player + '</b>' + (data.reason ? data.reason : ' was mauled by werewolves and died.') + ' After searching their pockets, it was revealed that they were a <b>' + data.role + '</b>.');
+                if (data.player == 'P' + window.pid) {
+                    $('#ingame').hide();
+                    $('#full').show();
+                }
+            })
+            socket.on('lynch', function(data) {
+                log('<b>' + data.from + '</b> votes for <b>' + data.to + '</b>!')
+            })
+        });
+    </script>
+</head>
+
+<body>
+    <center>
+        <div id="connecting">
+            <h1>Welcome to Lupus</h1>
+            <h2>Connecting...</h2>
+        </div>
+        <div id="setup" style="display: none;">
+            <h2>Ready to play</h2>
+            <p>The game is ready to start. Get four players to join!</p>
+            <h1>You are player <span class="playerid">0</span></h1>
+            <h2>Players: <span class="playerlist">none</span></h2>
+            <a id="start" style="display: none;" onclick="socket.emit('start')" class="btn btn-lg btn-default">Start the game</a>
+        </div>
+        <div id="ingame" style="display: none;">
+            <h1>You are player <span class="playerid">0</span></h1>
+            <h2><span id="role"></span></h2>
+            <h3 id="roledesc"></h3>
+            <h4 id="roleinst"></h4>
+            <div id="actbar" style="display: none;">
+                <h2>Nice big red buttons go here.</h2>
+            </div>
+            <ul id="message"></ul>
+        </div>
+        <div id="end" style="display: none;">
+            <h1>Game over!</h1>
+            <h2>The <span id="winners"></span> win!</h2>
+        </div>
+        <div id="full" style="display: none; color: #e00 !important;">
+            <h1>You died!</h1>
+            <h3>Please wait for the next game to start.</h3>
+        </div>
+    </center>
+</body>
+
+</html>
